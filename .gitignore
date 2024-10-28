@@ -1,3 +1,5 @@
 *.o
+benchmark
 http_server
+http_server_io_uring
 lru_cache
