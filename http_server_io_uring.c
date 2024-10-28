@@ -12,7 +12,7 @@
 #include <liburing.h>
 
 #define BUFFER_SIZE 4096
-#define QUEUE_DEPTH 1024
+#define QUEUE_DEPTH 4096
 #define NUM_PENDING_CONNECTIONS 32
 
 const char *hello_response = "HTTP/1.1 200 OK\r\n"
@@ -131,11 +131,10 @@ void add_read_request(struct io_uring *ring, int client_fd)
 	io_uring_sqe_set_data(sqe, read_data);
 }
 
-// Here we are not saving the clients connected in anyways.
+// Here we are not saving the clients connected in anyway.
 int main(int argc, char **argv)
 {
-	// These data structures are static, we avoid allocating
-	// them again and again.
+	// These data structures are static, we avoid allocating them again and again.
 	struct client_data client_data;
 	struct write_data write_data;
 	struct accept_data accept_data;
@@ -188,6 +187,8 @@ int main(int argc, char **argv)
 				if (cqe->res > 0) {
 					write_data.fd = rd->fd;
 					add_write_request(&ring, &write_data);
+					// Free the read_data after use
+					free(rd);
 					break;
 				}
 				close(rd->fd);
