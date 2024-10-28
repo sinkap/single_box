@@ -180,15 +180,12 @@ int main(int argc, char **argv)
 					break;
 				}
 				int client_fd = cqe->res;
-				printf("%d is the client fd\n", client_fd);
 				add_accept_request(&ring, &client_data, data);
 				add_read_request(&ring, client_fd);
 				break;
 			case OP_READ:
 				rd = data;
 				if (cqe->res > 0) {
-					printf("read %d bytes as %s\n",
-					       cqe->res, rd->buffer);
 					write_data.fd = rd->fd;
 					add_write_request(&ring, &write_data);
 					break;

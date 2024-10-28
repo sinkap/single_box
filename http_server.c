@@ -42,7 +42,7 @@ void handle_client(int client_fd, int epoll_fd, pthread_mutex_t *accept_mutex) {
 
     while ((bytes_read = read(client_fd, buffer, BUFFER_SIZE)) > 0) {
         // Process the received data
-        printf("Thread %ld handling client: %s\n", pthread_self(), buffer);
+        continue;
     }
 
     if (bytes_read == -1 && errno != EAGAIN) {
@@ -90,8 +90,6 @@ void *worker_thread(void *args) {
                     pthread_mutex_unlock(wargs->mutex);
                     continue;
                 }
-
-                printf("Accepted connection from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
                 if (set_nonblocking(client_fd) == -1) {
                     close(client_fd);
