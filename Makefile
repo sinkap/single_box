@@ -8,10 +8,19 @@ CFLAGS = -Wall -g
 SRC = $(wildcard *.c)
 EXEC = $(SRC:.c=)
 
-# Default target
+# Special executable with liburing dependency
+LIBURING_EXEC = http_server_io_uring
+LIBURING_SRC = http_server_io_uring.c
+LIBURING_FLAGS = -luring
+
+# Default target builds all executables
 all: $(EXEC)
 
-# Rule to build each executable
+# Rule to build each executable, with a special rule for liburing dependency
+$(LIBURING_EXEC): $(LIBURING_SRC)
+	$(CC) $(CFLAGS) -o $@ $< $(LIBURING_FLAGS)
+
+# Pattern rule for other executables
 %: %.c
 	$(CC) $(CFLAGS) -o $@ $<
 
@@ -19,7 +28,7 @@ all: $(EXEC)
 clean:
 	rm -f $(EXEC) *.o
 
-# Include a .gitignore file
+# Create .gitignore, listing each executable on a new line
 gitignore:
 	@echo "*.o" > .gitignore
 	@for exe in $(EXEC); do \
