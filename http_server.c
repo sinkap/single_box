@@ -35,27 +35,25 @@ void handle_client(int client_fd) {
     ssize_t bytes_read;
 
     // Read data from the client
-    bytes_read = read(client_fd, buffer, BUFFER_SIZE);
+    bytes_read = read(client_fd, buffer, BUFFER_SIZE - 1); // Leave space for null terminator
     if (bytes_read > 0) {
+        buffer[bytes_read] = '\0'; // Null-terminate the received data
         // Process the received data (here we just print it)
-        // printf("Received request:\n%s\n", buffer);
 
         // Send response
         const char *response = "HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nHello World!";
         write(client_fd, response, strlen(response));
-    } else if (bytes_read == -1 && errno != EAGAIN) {
-        perror("read");
+    } else if (bytes_read == -1) {
+        if (errno != EAGAIN) { // Only ignore EAGAIN
+            perror("read");
+        }
         close(client_fd);
         return;
     } else if (bytes_read == 0) {
-        printf("Client %d disconnected\n", client_fd);
+        // Client closed the connection
         close(client_fd);
         return;
     }
-
-    // Since we are handling the client and assuming it's done,
-    // we can close the connection.
-    close(client_fd);
 }
 
 void *worker_thread(void *args) {
@@ -165,8 +163,6 @@ int main(void) {
             exit(1);
         }
     }
-
-    printf("Server started on port 8080\n");
 
     for (int i = 0; i < NUM_THREADS; i++) {
         if (pthread_join(threads[i], NULL) != 0) {
