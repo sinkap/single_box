@@ -94,8 +94,6 @@ void *worker_thread(void *args) {
                     perror("epoll_ctl - ADD");
                     close(client_fd);
                 }
-
-                printf("Accepted connection from client %d\n", client_fd);
             } else {
                 // Handle client requests
                 handle_client(events[i].data.fd);
