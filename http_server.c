@@ -10,8 +10,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define MAX_EVENTS 10
-#define NUM_PENDING_CONNECTIONS 5
+#define MAX_EVENTS 1000
+#define NUM_PENDING_CONNECTIONS 100
 #define NUM_THREADS 4
 #define BUFFER_SIZE 1024
 
@@ -30,29 +30,39 @@ int set_nonblocking(int fd) {
     return fcntl(fd, F_SETFL, flags);
 }
 
-void handle_client(int client_fd) {
+void handle_client(int epoll_fd, int client_fd) {
+    const char *response = "HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nHello World!";
     char buffer[BUFFER_SIZE];
     ssize_t bytes_read;
 
-    // Read data from the client
-    bytes_read = read(client_fd, buffer, BUFFER_SIZE - 1); // Leave space for null terminator
-    if (bytes_read > 0) {
-        buffer[bytes_read] = '\0'; // Null-terminate the received data
-        // Process the received data (here we just print it)
-
-        // Send response
-        const char *response = "HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nHello World!";
-        write(client_fd, response, strlen(response));
-    } else if (bytes_read == -1) {
-        if (errno != EAGAIN) { // Only ignore EAGAIN
-            perror("read");
+    // Read client data in a loop until EAGAIN or error
+    while (1) {
+        bytes_read = read(client_fd, buffer, BUFFER_SIZE);
+        if (bytes_read > 0) {
+            // TODO: Do something with the request data, e.g parse headers etc.
+        } else if (bytes_read == 0) {
+            // Client closed the connection
+            close(client_fd);
+            return;
+        } else { // bytes_read == -1
+            if (errno == EAGAIN) {
+                // No more data available now
+                break;
+            } else {
+                perror("read");
+                break;
+            }
         }
+    }
+
+    write(client_fd, response, strlen(response));
+
+    struct epoll_event ev;
+    ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
+    ev.data.fd = client_fd;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_fd, &ev) == -1) {
+        perror("epoll_ctl: EPOLL_CTL_MOD");
         close(client_fd);
-        return;
-    } else if (bytes_read == 0) {
-        // Client closed the connection
-        close(client_fd);
-        return;
     }
 }
 
@@ -74,18 +84,16 @@ void *worker_thread(void *args) {
                 int client_fd = accept(wargs->server_fd, (struct sockaddr *)&client_addr, &client_addr_len);
 
                 if (client_fd == -1) {
-                    perror("accept");
                     continue;
                 }
 
                 if (set_nonblocking(client_fd) == -1) {
-                    close(client_fd);
                     continue;
                 }
 
-                // Add client_fd to epoll with EPOLLEXCLUSIVE
+                // Add client_fd to epoll without EPOLLEXCLUSIVE
                 struct epoll_event ev;
-                ev.events = EPOLLIN | EPOLLET | EPOLLEXCLUSIVE; // Use EPOLLEXCLUSIVE here
+                ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
                 ev.data.fd = client_fd;
 
                 if (epoll_ctl(wargs->epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) == -1) {
@@ -94,7 +102,7 @@ void *worker_thread(void *args) {
                 }
             } else {
                 // Handle client requests
-                handle_client(events[i].data.fd);
+                handle_client(wargs->epoll_fd, events[i].data.fd);
             }
         }
     }
@@ -114,7 +122,6 @@ int main(void) {
     }
 
     int optval = 1;
-    // SO_REUSEADDR to quickly restart the server
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1) {
         perror("setsockopt");
         exit(-1);
@@ -142,7 +149,7 @@ int main(void) {
     }
 
     struct epoll_event ev;
-    ev.events = EPOLLIN | EPOLLET; // Do not use EPOLLEXCLUSIVE for the server_fd
+    ev.events = EPOLLIN | EPOLLEXCLUSIVE;
     ev.data.fd = server_fd;
 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &ev) == -1) {
