@@ -50,7 +50,7 @@ void handle_client(int epoll_fd, int client_fd) {
                 break;
             } else {
                 perror("read");
-                break;
+                return;
             }
         }
     }
